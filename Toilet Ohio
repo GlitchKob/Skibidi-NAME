@@ -1,0 +1,293 @@
+local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
+local UserInputService = game:GetService("UserInputService")
+
+-- Variables
+local highlightEnabled = false
+local hitboxEnabled = false
+local aimbotEnabled = false
+local fovRadius = 200
+local holdingE = false
+local fovCircle = Drawing.new("Circle")
+fovCircle.Color = Color3.fromRGB(0, 255, 0)
+fovCircle.Thickness = 1.5
+fovCircle.Radius = fovRadius
+fovCircle.Filled = false
+fovCircle.Transparency = 1
+fovCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+
+-- Team Colors
+local teamColorMap = {
+    ["Sheriff"] = Color3.fromRGB(245, 245, 220), -- Beige
+    ["Firefighter"] = Color3.fromRGB(255, 0, 0), -- Rot
+    ["Police"] = Color3.fromRGB(173, 216, 230), -- Hellblau
+    ["Civilian"] = Color3.fromRGB(169, 169, 169) -- Grau
+}
+
+-- Functions
+local function isVisible(character)
+    local head = character:FindFirstChild("Head")
+    if not head then return false end
+
+    local origin = Camera.CFrame.Position
+    local direction = (head.Position - origin).Unit
+    local ray = Ray.new(origin, direction * 500)
+    local hit = workspace:FindPartOnRay(ray, Players.LocalPlayer.Character)
+    return hit and hit:IsDescendantOf(character)
+end
+
+local function getClosestPlayer()
+    local closestPlayer = nil
+    local shortestDistance = fovRadius
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= Players.LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
+            local headPosition = Camera:WorldToViewportPoint(player.Character.Head.Position)
+            local mouseDistance = (Vector2.new(headPosition.X, headPosition.Y) - fovCircle.Position).Magnitude
+
+            if mouseDistance < shortestDistance and isVisible(player.Character) then
+                local direction = (player.Character.Head.Position - Camera.CFrame.Position).Unit
+                if Camera.CFrame.LookVector:Dot(direction) > 0 then
+                    closestPlayer = player
+                    shortestDistance = mouseDistance
+                end
+            end
+        end
+    end
+
+    return closestPlayer
+end
+
+local function createHighlight(player)
+    if not player.Character or not player.Character:FindFirstChild("Head") then return end
+
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "PlayerHighlight"
+    highlight.Adornee = player.Character
+    highlight.Parent = player.Character
+    highlight.FillTransparency = 0.7 -- Leicht weiß
+    highlight.FillColor = Color3.new(1, 1, 1) -- Weiß
+    highlight.OutlineTransparency = 0 -- Voll weißer Rand
+    highlight.OutlineColor = Color3.new(1, 1, 1) -- Weiß
+end
+
+local function removeHighlight(player)
+    if not player.Character then return end
+    local highlight = player.Character:FindFirstChild("PlayerHighlight")
+    if highlight then
+        highlight:Destroy()
+    end
+end
+
+local function createHitbox(player)
+    if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return end
+    local team = player.Team and player.Team.Name or "Civilian"
+    local color = teamColorMap[team] or Color3.fromRGB(255, 255, 255)
+
+    local box = Instance.new("BoxHandleAdornment")
+    box.Name = "HitboxBox"
+    box.Adornee = player.Character
+    box.Size = Vector3.new(4, 6, 2) -- Körpergröße
+    box.Color3 = color
+    box.Transparency = 0
+    box.ZIndex = 2
+    box.AlwaysOnTop = true
+    box.AdornCullingMode = Enum.AdornCullingMode.Never
+    box.Parent = player.Character
+end
+
+local function removeHitbox(player)
+    if not player.Character then return end
+    local box = player.Character:FindFirstChild("HitboxBox")
+    if box then
+        box:Destroy()
+    end
+end
+
+-- Create Window
+local window = Rayfield:CreateWindow({
+    Name = "NovaV1 I ERLC",
+    LoadingTitle = "NovaV1 I ERLC",
+    LoadingSubtitle = "By 049k",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = nil,
+        FileName = "NovaV1ErlcConfig"
+    }
+})
+
+-- Home Tab
+local homeTab = window:CreateTab("Home", 4483362458)
+homeTab:CreateLabel("Have Fun.")
+
+-- Aimbot Tab
+local aimbotTab = window:CreateTab("Aimbot", 4483362458)
+aimbotTab:CreateToggle({
+    Name = "Enable Aimbot",
+    CurrentValue = false,
+    Flag = "aimbotToggle",
+    Callback = function(value)
+        aimbotEnabled = value
+    end
+})
+aimbotTab:CreateInput({
+    Name = "FOV Radius",
+    PlaceholderText = "Enter FOV size (e.g., 200)",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(text)
+        local newRadius = tonumber(text)
+        if newRadius and newRadius > 0 then
+            fovRadius = newRadius
+            fovCircle.Radius = newRadius
+        end
+    end
+})
+
+-- Visuals Tab
+local visualsTab = window:CreateTab("Visuals", 4483362458)
+visualsTab:CreateToggle({
+    Name = "Highlight Players",
+    CurrentValue = false,
+    Flag = "highlightToggle",
+    Callback = function(value)
+        highlightEnabled = value
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= Players.LocalPlayer then
+                if highlightEnabled then
+                    createHighlight(player)
+                else
+                    removeHighlight(player)
+                end
+            end
+        end
+    end
+})
+
+visualsTab:CreateToggle({
+    Name = "Hitboxes",
+    CurrentValue = false,
+    Flag = "hitboxToggle",
+    Callback = function(value)
+        hitboxEnabled = value
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= Players.LocalPlayer then
+                if hitboxEnabled then
+                    createHitbox(player)
+                else
+                    removeHitbox(player)
+                end
+            end
+        end
+    end
+})
+
+-- TP Tab
+local tpTab = window:CreateTab("TP", 4483362458)
+tpTab:CreateDropdown({
+    Name = "Teleport To Player",
+    Options = {},
+    Callback = function(selectedPlayer)
+        local targetPlayer = Players:FindFirstChild(selectedPlayer)
+        if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            Camera.CFrame = CFrame.new(targetPlayer.Character.HumanoidRootPart.Position + Vector3.new(0, 3, 0))
+        end
+    end
+})
+
+-- Teleport to MOD SHOP with Vehicle
+tpTab:CreateButton({
+    Name = "Mod Shop",
+    Callback = function()
+        -- Zielkoordinaten (mit höherem Y-Wert für den Spieler)
+        local teleportPosition = Vector3.new(-690.8313598632812, 32.774797439575195, 246.4668426513672)
+        local player = Players.LocalPlayer
+        local character = player.Character
+        local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+        local humanoid = character:WaitForChild("Humanoid")
+
+        -- Teleportiere den Spieler
+        humanoidRootPart.CFrame = CFrame.new(teleportPosition)
+
+        -- Wenn der Spieler ein Fahrzeug fährt
+        local vehicle = character:FindFirstChild("Vehicle")  -- Dies könnte "Vehicle" oder ein anderer Name sein, je nach Spiel
+        if vehicle then
+            -- Teleportiere das Fahrzeug zur gleichen Position
+            local vehiclePrimaryPart = vehicle:FindFirstChild("PrimaryPart")  -- Stellen sicher, dass das Fahrzeug einen PrimaryPart hat
+            if vehiclePrimaryPart then
+                vehiclePrimaryPart.CFrame = CFrame.new(teleportPosition)
+            end
+        end
+
+        -- Verhindere, dass der Spieler durch die Map fliegt
+        humanoid.PlatformStand = true
+        humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+        wait(0.1)  -- Kurze Verzögerung, um den Zustand zu aktualisieren
+
+        -- Setze die Position zurück und deaktiviere PlatformStand
+        humanoid.PlatformStand = false
+        humanoidRootPart.Anchored = false  -- Deaktiviere das Verankern
+        humanoidRootPart.Velocity = Vector3.new(0, 0, 0)  -- Setze die Geschwindigkeit auf 0, um ein Weitermovement zu verhindern
+
+        -- Optional: Wenn das Fahrzeug vorhanden ist, stelle sicher, dass es ebenfalls korrekt positioniert wird
+        if vehicle then
+            local vehiclePrimaryPart = vehicle:FindFirstChild("PrimaryPart")
+            if vehiclePrimaryPart then
+                vehiclePrimaryPart.CFrame = CFrame.new(teleportPosition)
+            end
+        end
+    end
+})
+
+
+
+
+
+-- Populate Teleport Dropdown
+for _, player in ipairs(Players:GetPlayers()) do
+    if player ~= Players.LocalPlayer then
+        tpTab:CreateDropdown().AddOption(player.Name)
+    end
+end
+
+-- Aimbot Logic
+RunService.RenderStepped:Connect(function()
+    fovCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    if holdingE and aimbotEnabled then
+        local target = getClosestPlayer()
+        if target and target.Character and target.Character:FindFirstChild("Head") then
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Character.Head.Position)
+        end
+    end
+end)
+
+-- Input Handling
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.E then
+        holdingE = true
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.E then
+        holdingE = false
+    end
+end)
+
+-- Player Events
+Players.PlayerAdded:Connect(function(player)
+    player.CharacterAdded:Connect(function()
+        if highlightEnabled then
+            createHighlight(player)
+        end
+        if hitboxEnabled then
+            createHitbox(player)
+        end
+    end)
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    removeHighlight(player)
+    removeHitbox(player)
+end)
